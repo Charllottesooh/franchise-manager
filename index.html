@@ -1,0 +1,1569 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>가맹점 변동현황 관리</title>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Pretendard', 'Apple SD Gothic Neo', sans-serif;
+    background: #fafafa;
+    color: #2b2b2b;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ===== 레이아웃 ===== */
+  .app {
+    display: flex;
+    min-height: 100vh;
+  }
+
+  /* ===== 사이드바 ===== */
+  .sidebar {
+    width: 240px;
+    background: #ffffff;
+    border-right: 1px solid #ececec;
+    padding: 24px 16px;
+    position: fixed;
+    height: 100vh;
+    overflow-y: auto;
+  }
+  .sidebar h1 {
+    font-size: 15px;
+    font-weight: 700;
+    color: #1a1a1a;
+    padding: 0 8px 20px 8px;
+    border-bottom: 1px solid #f0f0f0;
+    margin-bottom: 16px;
+    letter-spacing: -0.3px;
+  }
+  .sync-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    background: #f9f9f9;
+    border-radius: 6px;
+    margin-bottom: 16px;
+    font-size: 12px;
+    color: #555;
+  }
+  .sync-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #ccc;
+    flex-shrink: 0;
+  }
+  .sync-dot.connected { background: #1aa260; box-shadow: 0 0 0 3px rgba(26,162,96,0.15); }
+  .sync-dot.syncing { background: #f5a623; animation: pulse 1.2s infinite; }
+  .sync-dot.error { background: #e34a4a; }
+  @keyframes pulse {
+    0%,100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.8); }
+  }
+  /* 뷰 모드 (읽기 전용) */
+  body.view-mode .header-actions,
+  body.view-mode .row-actions,
+  body.view-mode #totalStoresInput,
+  body.view-mode .nav-actions { display: none !important; }
+  body.view-mode #totalStoresInput { pointer-events: none; }
+  .view-mode-banner {
+    background: #fff8e1;
+    border: 1px solid #f5d800;
+    color: #7a6800;
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    margin-bottom: 16px;
+    display: none;
+  }
+  body.view-mode .view-mode-banner { display: block; }
+  .year-selector {
+    margin-bottom: 20px;
+    padding: 0 8px;
+  }
+  .year-selector label {
+    display: block;
+    font-size: 11px;
+    color: #888;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+  }
+  .year-selector select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #e5e5e5;
+    border-radius: 6px;
+    background: #fff;
+    font-size: 13px;
+    color: #2b2b2b;
+    cursor: pointer;
+  }
+  .year-selector select:focus {
+    outline: none;
+    border-color: #2b2b2b;
+  }
+
+  .nav-section {
+    margin-bottom: 8px;
+  }
+  .nav-label {
+    font-size: 11px;
+    color: #999;
+    padding: 8px 8px 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+  }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #444;
+    transition: background 0.15s;
+    margin-bottom: 2px;
+  }
+  .nav-item:hover {
+    background: #f4f4f4;
+  }
+  .nav-item.active {
+    background: #f0f0f0;
+    color: #1a1a1a;
+    font-weight: 600;
+  }
+  .nav-item .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    margin-right: 10px;
+    display: inline-block;
+  }
+  .nav-item .count {
+    font-size: 11px;
+    background: #ececec;
+    color: #666;
+    padding: 2px 7px;
+    border-radius: 10px;
+    font-weight: 600;
+  }
+  .dot.new { background: #f5d800; }
+  .dot.change { background: #1aa260; }
+  .dot.close { background: #e34a4a; }
+  .dot.all { background: #888; }
+
+  .nav-actions {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid #f0f0f0;
+  }
+  .nav-action {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    color: #555;
+    width: 100%;
+    background: none;
+    border: none;
+    text-align: left;
+  }
+  .nav-action:hover { background: #f4f4f4; }
+  .nav-action svg { width: 14px; height: 14px; opacity: 0.7; }
+
+  /* ===== 메인 콘텐츠 ===== */
+  .main {
+    margin-left: 240px;
+    flex: 1;
+    padding: 32px 40px;
+    max-width: calc(100vw - 240px);
+  }
+  .main-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 28px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #ececec;
+  }
+  .main-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .main-title .badge {
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    color: #1a1a1a;
+  }
+  .badge.new { background: #f5d800; }
+  .badge.change { background: #1aa260; color: white; }
+  .badge.close { background: #e34a4a; color: white; }
+  .badge.all { background: #2b2b2b; color: white; }
+  .main-title h2 {
+    font-size: 22px;
+    font-weight: 700;
+    color: #1a1a1a;
+    letter-spacing: -0.5px;
+  }
+  .main-title p {
+    color: #888;
+    font-size: 12px;
+    margin-top: 2px;
+  }
+
+  .header-actions {
+    display: flex;
+    gap: 8px;
+  }
+  .btn {
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: 1px solid #e0e0e0;
+    background: #fff;
+    cursor: pointer;
+    font-size: 13px;
+    color: #444;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+  .btn:hover {
+    background: #f4f4f4;
+    border-color: #d0d0d0;
+  }
+  .btn-primary {
+    background: #1a1a1a;
+    color: #fff;
+    border-color: #1a1a1a;
+  }
+  .btn-primary:hover {
+    background: #000;
+    border-color: #000;
+  }
+  .btn svg { width: 14px; height: 14px; }
+
+  /* ===== 검색바 ===== */
+  .search-bar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    align-items: center;
+  }
+  .search-input {
+    flex: 1;
+    padding: 9px 12px;
+    border: 1px solid #e5e5e5;
+    border-radius: 6px;
+    font-size: 13px;
+    background: #fff;
+    font-family: inherit;
+  }
+  .search-input:focus {
+    outline: none;
+    border-color: #1a1a1a;
+  }
+  .filter-chip {
+    padding: 6px 12px;
+    background: #fff;
+    border: 1px solid #e5e5e5;
+    border-radius: 20px;
+    font-size: 12px;
+    color: #666;
+    cursor: pointer;
+  }
+  .filter-chip.active {
+    background: #1a1a1a;
+    color: #fff;
+    border-color: #1a1a1a;
+  }
+
+  /* ===== 통계 카드 ===== */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .stat-card {
+    background: #fff;
+    border: 1px solid #ececec;
+    border-radius: 8px;
+    padding: 16px 18px;
+  }
+  .stat-card .label {
+    font-size: 11px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .stat-card .value {
+    font-size: 26px;
+    font-weight: 700;
+    color: #1a1a1a;
+    letter-spacing: -0.5px;
+  }
+  .stat-card .sub {
+    font-size: 11px;
+    color: #999;
+    margin-top: 2px;
+  }
+  .stat-card.accent-store { border-top: 3px solid #4a7bf0; }
+  .stat-card.accent-new { border-top: 3px solid #f5d800; }
+  .stat-card.accent-change { border-top: 3px solid #1aa260; }
+  .stat-card.accent-close { border-top: 3px solid #e34a4a; }
+  .stat-card.accent-total { border-top: 3px solid #2b2b2b; }
+
+  /* ===== 테이블 ===== */
+  .table-wrapper {
+    background: #fff;
+    border: 1px solid #ececec;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .table-scroll {
+    overflow-x: auto;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    min-width: 800px;
+  }
+  thead {
+    background: #fafafa;
+    border-bottom: 1px solid #ececec;
+  }
+  th {
+    text-align: left;
+    padding: 12px 14px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+  }
+  td {
+    padding: 12px 14px;
+    border-bottom: 1px solid #f4f4f4;
+    color: #2b2b2b;
+    vertical-align: middle;
+  }
+  tbody tr:hover {
+    background: #fafafa;
+  }
+  tbody tr:last-child td {
+    border-bottom: none;
+  }
+  .row-actions {
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  tbody tr:hover .row-actions { opacity: 1; }
+  .icon-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: 4px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #666;
+  }
+  .icon-btn:hover { background: #ececec; color: #1a1a1a; }
+  .icon-btn.danger:hover { background: #fde8e8; color: #e34a4a; }
+  .icon-btn svg { width: 14px; height: 14px; }
+
+  .empty-state {
+    padding: 60px 20px;
+    text-align: center;
+    color: #999;
+  }
+  .empty-state .icon {
+    font-size: 36px;
+    margin-bottom: 8px;
+    opacity: 0.3;
+  }
+  .empty-state p { font-size: 13px; }
+
+  /* ===== 모달 ===== */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 20px;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: #fff;
+    border-radius: 12px;
+    width: 100%;
+    max-width: 620px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  }
+  .modal-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid #ececec;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .modal-header h3 {
+    font-size: 17px;
+    font-weight: 700;
+    color: #1a1a1a;
+  }
+  .modal-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 22px;
+    color: #888;
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+  }
+  .modal-close:hover { background: #f0f0f0; }
+  .modal-body {
+    padding: 20px 24px;
+  }
+  .modal-footer {
+    padding: 16px 24px;
+    border-top: 1px solid #ececec;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 14px;
+  }
+  .form-row.full { grid-template-columns: 1fr; }
+  .form-field label {
+    display: block;
+    font-size: 11px;
+    color: #666;
+    margin-bottom: 5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  .form-field input,
+  .form-field textarea,
+  .form-field select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #e5e5e5;
+    border-radius: 6px;
+    font-size: 13px;
+    background: #fff;
+    font-family: inherit;
+  }
+  .form-field input:focus,
+  .form-field textarea:focus,
+  .form-field select:focus {
+    outline: none;
+    border-color: #1a1a1a;
+  }
+  .form-field textarea {
+    resize: vertical;
+    min-height: 60px;
+  }
+
+  .form-section {
+    margin-top: 18px;
+    padding-top: 18px;
+    border-top: 1px dashed #ececec;
+  }
+  .form-section-title {
+    font-size: 12px;
+    color: #1a1a1a;
+    font-weight: 700;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+
+  /* ===== 인쇄 ===== */
+  @media print {
+    .sidebar, .header-actions, .search-bar, .row-actions, .stats { display: none !important; }
+    .main { margin-left: 0; padding: 20px; }
+    .table-wrapper { border: 1px solid #000; }
+    body { background: #fff; }
+  }
+
+  /* ===== 반응형 ===== */
+  @media (max-width: 1200px) {
+    .stats { grid-template-columns: repeat(3, 1fr); }
+  }
+  @media (max-width: 900px) {
+    .sidebar { transform: translateX(-100%); transition: transform 0.2s; z-index: 50; }
+    .sidebar.open { transform: translateX(0); }
+    .main { margin-left: 0; max-width: 100vw; padding: 20px; }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .form-row { grid-template-columns: 1fr; }
+  }
+
+  /* 토스트 */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: #1a1a1a;
+    color: #fff;
+    padding: 10px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all 0.2s;
+    z-index: 200;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- 사이드바 -->
+  <aside class="sidebar">
+    <h1>가맹점 변동현황</h1>
+
+    <div class="sync-status" id="syncStatus">
+      <span class="sync-dot" id="syncDot"></span>
+      <span id="syncText">연결 중...</span>
+    </div>
+
+    <div class="year-selector">
+      <label>관리 연도</label>
+      <select id="yearSelect"></select>
+    </div>
+
+    <div class="year-selector">
+      <label>전체 가맹점 수</label>
+      <input type="number" id="totalStoresInput" min="0" placeholder="예: 120" style="width:100%; padding:8px 10px; border:1px solid #e5e5e5; border-radius:6px; font-size:13px; font-family:inherit;">
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">View</div>
+      <div class="nav-item active" data-view="all">
+        <span><span class="dot all"></span>전체</span>
+        <span class="count" id="count-all">0</span>
+      </div>
+      <div class="nav-item" data-view="new">
+        <span><span class="dot new"></span>신규</span>
+        <span class="count" id="count-new">0</span>
+      </div>
+      <div class="nav-item" data-view="change">
+        <span><span class="dot change"></span>명의변경</span>
+        <span class="count" id="count-change">0</span>
+      </div>
+      <div class="nav-item" data-view="close">
+        <span><span class="dot close"></span>폐점</span>
+        <span class="count" id="count-close">0</span>
+      </div>
+    </div>
+
+    <div class="nav-actions">
+      <button class="nav-action" onclick="manualSheetsBackup()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/></svg>
+        Google Sheets 백업
+      </button>
+      <button class="nav-action" onclick="shareViewLink()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+        읽기 전용 링크 공유
+      </button>
+      <button class="nav-action" onclick="exportJSON()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+        백업 (JSON 내보내기)
+      </button>
+      <button class="nav-action" onclick="document.getElementById('importFile').click()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+        복원 (JSON 불러오기)
+      </button>
+      <input type="file" id="importFile" accept=".json" style="display:none" onchange="importJSON(event)">
+      <button class="nav-action" onclick="exportCSV()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+        CSV 내보내기
+      </button>
+      <button class="nav-action" onclick="window.print()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg>
+        인쇄
+      </button>
+    </div>
+  </aside>
+
+  <!-- 메인 -->
+  <main class="main">
+    <div class="view-mode-banner">
+      👁 <strong>읽기 전용 모드</strong> — 데이터를 보기만 할 수 있습니다. 수정/추가/삭제는 불가능합니다.
+    </div>
+    <div class="main-header">
+      <div class="main-title">
+        <span class="badge all" id="viewBadge">전체</span>
+        <div>
+          <h2 id="viewTitle">전체 가맹점</h2>
+          <p id="viewSubtitle">모든 변동 항목을 보고 있습니다</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-primary" onclick="openAddModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          새 항목
+        </button>
+      </div>
+    </div>
+
+    <!-- 통계 -->
+    <div class="stats">
+      <div class="stat-card accent-store">
+        <div class="label">전체 가맹점</div>
+        <div class="value" id="stat-total-stores">0</div>
+        <div class="sub">개</div>
+      </div>
+      <div class="stat-card accent-total">
+        <div class="label">변동 합계</div>
+        <div class="value" id="stat-all">0</div>
+        <div class="sub">건</div>
+      </div>
+      <div class="stat-card accent-new">
+        <div class="label">신규</div>
+        <div class="value" id="stat-new">0</div>
+        <div class="sub">건</div>
+      </div>
+      <div class="stat-card accent-change">
+        <div class="label">명의변경</div>
+        <div class="value" id="stat-change">0</div>
+        <div class="sub">건</div>
+      </div>
+      <div class="stat-card accent-close">
+        <div class="label">폐점</div>
+        <div class="value" id="stat-close">0</div>
+        <div class="sub">건</div>
+      </div>
+    </div>
+
+    <!-- 검색바 -->
+    <div class="search-bar">
+      <input type="text" class="search-input" id="searchInput" placeholder="가맹점명, 대표자명으로 검색..." oninput="renderTable()">
+    </div>
+
+    <!-- 테이블 -->
+    <div class="table-wrapper">
+      <div class="table-scroll" id="tableContainer">
+        <!-- 동적 렌더링 -->
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- 모달 -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modalTitle">새 항목 추가</h3>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal()">취소</button>
+      <button class="btn btn-primary" onclick="saveItem()">저장</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* =====================================================
+ *  가맹점 변동현황 관리 - 3단계
+ *  Firebase Realtime DB + Google Sheets 자동 백업
+ * ===================================================== */
+
+/* ===== Firebase 설정 ===== */
+const firebaseConfig = {
+  apiKey: "AIzaSyBVXPhGtvuN53QITD9VE4vJEJJ2if9ytY0",
+  authDomain: "franchise-877ad.firebaseapp.com",
+  databaseURL: "https://franchise-877ad-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "franchise-877ad",
+  storageBucket: "franchise-877ad.firebasestorage.app",
+  messagingSenderId: "913697461991",
+  appId: "1:913697461991:web:4ef75212a51d8b1ce2b442"
+};
+
+const SHEETS_BACKUP_URL = "https://script.google.com/macros/s/AKfycbx-fnT5uFcvwvi-rvwYj_68AoaqOF0hSyRGsC1NMx6hfBQn4MJh_49-1v152ly_tuw/exec";
+const DB_ROOT = 'franchise'; // Firebase 데이터 루트
+const STORAGE_KEY = 'franchise_manager_v1';
+
+/* ===== 뷰모드 감지 ===== */
+const urlParams = new URLSearchParams(window.location.search);
+const VIEW_MODE = urlParams.get('mode') === 'view';
+if (VIEW_MODE) document.body.classList.add('view-mode');
+
+/* ===== Firebase 초기화 ===== */
+let db = null;
+let firebaseConnected = false;
+try {
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.database();
+  console.log('[Firebase] Initialized');
+} catch(e) {
+  console.error('[Firebase] Init failed', e);
+}
+
+/* ===== 상태 ===== */
+const state = {
+  currentYear: new Date().getFullYear(),
+  currentView: 'all',
+  editing: null,
+  data: {},
+  isWritingToFirebase: false,  // listener overwrite 방지 플래그
+  pendingBackupTimer: null
+};
+
+/* ===== 동기화 상태 표시 ===== */
+function setSyncStatus(status, text) {
+  const dot = document.getElementById('syncDot');
+  const txt = document.getElementById('syncText');
+  if (!dot || !txt) return;
+  dot.className = 'sync-dot ' + status;
+  txt.textContent = text;
+}
+
+/* ===== 로컬 캐시 ===== */
+function loadLocal() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    state.data = raw ? JSON.parse(raw) : {};
+  } catch(e) {
+    console.error('Local load failed', e);
+    state.data = {};
+  }
+  ensureYear(state.currentYear);
+}
+function saveLocal() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state.data));
+}
+function ensureYear(y) {
+  if (!state.data[y]) state.data[y] = { new: [], change: [], close: [], totalStores: 0 };
+  if (state.data[y].totalStores === undefined) state.data[y].totalStores = 0;
+  if (!Array.isArray(state.data[y].new)) state.data[y].new = [];
+  if (!Array.isArray(state.data[y].change)) state.data[y].change = [];
+  if (!Array.isArray(state.data[y].close)) state.data[y].close = [];
+}
+
+/* ===== Firebase 데이터 정규화 =====
+ * Firebase는 배열을 객체로 변환할 수 있어 복원 시 배열로 강제 변환
+ */
+function normalizeFromFirebase(raw) {
+  if (!raw || typeof raw !== 'object') return {};
+  const result = {};
+  Object.keys(raw).forEach(year => {
+    const yr = raw[year];
+    if (!yr) return;
+    result[year] = {
+      totalStores: Number(yr.totalStores) || 0,
+      new: toArray(yr.new),
+      change: toArray(yr.change),
+      close: toArray(yr.close)
+    };
+  });
+  return result;
+}
+function toArray(v) {
+  if (!v) return [];
+  if (Array.isArray(v)) return v.filter(x => x != null);
+  if (typeof v === 'object') return Object.values(v).filter(x => x != null);
+  return [];
+}
+
+/* ===== Firebase 쓰기 ===== */
+async function saveToFirebase() {
+  if (!db || VIEW_MODE) return;
+  try {
+    state.isWritingToFirebase = true;
+    setSyncStatus('syncing', '저장 중...');
+    await db.ref(DB_ROOT).set(state.data);
+    setSyncStatus('connected', '동기화됨');
+    // 쓰기 직후 listener overwrite 방지 (Firebase가 자체 데이터를 다시 푸시)
+    setTimeout(() => { state.isWritingToFirebase = false; }, 800);
+    // 백업 예약 (디바운싱)
+    scheduleSheetsBackup();
+  } catch(e) {
+    console.error('[Firebase] Save failed', e);
+    setSyncStatus('error', '저장 실패 (로컬만 저장됨)');
+    state.isWritingToFirebase = false;
+  }
+}
+
+/* ===== Firebase 리스너 (다른 디바이스 변경 감지) ===== */
+function attachFirebaseListener() {
+  if (!db) {
+    setSyncStatus('error', '오프라인 모드');
+    return;
+  }
+  db.ref(DB_ROOT).on('value', snapshot => {
+    // 본인이 방금 쓴 변경이면 무시
+    if (state.isWritingToFirebase) {
+      console.log('[Firebase] Echo ignored');
+      return;
+    }
+    const remote = snapshot.val();
+    if (remote === null) {
+      // 원격이 비어있으면 로컬 데이터를 푸시 (최초 사용 시)
+      console.log('[Firebase] Remote empty, pushing local');
+      if (Object.keys(state.data).length > 0 && !VIEW_MODE) {
+        saveToFirebase();
+      }
+      setSyncStatus('connected', '연결됨 (데이터 없음)');
+      return;
+    }
+    state.data = normalizeFromFirebase(remote);
+    ensureYear(state.currentYear);
+    saveLocal();
+    setSyncStatus('connected', VIEW_MODE ? '읽기 전용' : '동기화됨');
+    initYearSelector();
+    renderAll();
+  }, err => {
+    console.error('[Firebase] Listener error', err);
+    setSyncStatus('error', '연결 실패 (로컬 사용 중)');
+  });
+
+  // 연결 상태 모니터링
+  db.ref('.info/connected').on('value', snap => {
+    firebaseConnected = snap.val();
+    if (!firebaseConnected) {
+      setSyncStatus('error', '오프라인 (로컬 저장 중)');
+    }
+  });
+}
+
+/* ===== Google Sheets 자동 백업 (디바운싱) ===== */
+function scheduleSheetsBackup() {
+  if (VIEW_MODE || !SHEETS_BACKUP_URL) return;
+  if (state.pendingBackupTimer) clearTimeout(state.pendingBackupTimer);
+  state.pendingBackupTimer = setTimeout(() => {
+    runSheetsBackup();
+  }, 3000); // 3초 동안 추가 변경 없으면 백업 실행
+}
+function runSheetsBackup(silent = true) {
+  if (!SHEETS_BACKUP_URL || VIEW_MODE) return;
+  const y = state.currentYear;
+  const payload = state.data[y] || { new:[], change:[], close:[], totalStores:0 };
+  const allYears = Object.keys(state.data).map(Number).filter(n => !isNaN(n));
+
+  if (!silent) setSyncStatus('syncing', 'Sheets 백업 중...');
+
+  // CORS 회피: text/plain Content-Type
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', SHEETS_BACKUP_URL, true);
+  xhr.setRequestHeader('Content-Type', 'text/plain;charset=utf-8');
+  xhr.onload = function() {
+    if (xhr.status === 200) {
+      console.log('[Sheets] Backup success', xhr.responseText);
+      if (!silent) {
+        showToast('Google Sheets 백업 완료');
+        setSyncStatus('connected', '동기화됨');
+      }
+    } else {
+      console.warn('[Sheets] Backup failed', xhr.status);
+      if (!silent) showToast('Sheets 백업 실패: ' + xhr.status);
+    }
+  };
+  xhr.onerror = function() {
+    console.error('[Sheets] Network error');
+    if (!silent) showToast('Sheets 백업 네트워크 오류');
+  };
+  xhr.send(JSON.stringify({
+    year: y,
+    payload: payload,
+    allData: state.data,
+    allYears: allYears
+  }));
+}
+
+/* ===== 통합 저장 (로컬 + Firebase + Sheets) ===== */
+function saveData() {
+  saveLocal();
+  saveToFirebase();
+}
+
+/* ---------- 연도 셀렉터 ---------- */
+function initYearSelector() {
+  const sel = document.getElementById('yearSelect');
+  if (!sel) return;
+  const years = new Set(Object.keys(state.data).map(Number).filter(n => !isNaN(n)));
+  const thisYear = new Date().getFullYear();
+  for (let y = thisYear - 3; y <= thisYear + 1; y++) years.add(y);
+  years.add(state.currentYear);
+
+  sel.innerHTML = '';
+  [...years].sort((a,b)=>b-a).forEach(y => {
+    const opt = document.createElement('option');
+    opt.value = y; opt.textContent = y + '년';
+    if (y === state.currentYear) opt.selected = true;
+    sel.appendChild(opt);
+  });
+
+  sel.onchange = (e) => {
+    state.currentYear = Number(e.target.value);
+    ensureYear(state.currentYear);
+    renderAll();
+  };
+}
+
+/* ---------- 네비게이션 ---------- */
+function initNav() {
+  document.querySelectorAll('.nav-item').forEach(el => {
+    el.onclick = () => {
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      el.classList.add('active');
+      state.currentView = el.dataset.view;
+      renderAll();
+    };
+  });
+}
+
+/* ---------- 렌더링 ---------- */
+function renderAll() {
+  updateCounts();
+  updateHeader();
+  renderTable();
+}
+
+function updateCounts() {
+  const y = state.data[state.currentYear] || { new:[], change:[], close:[] };
+  const counts = {
+    new: y.new.length,
+    change: y.change.length,
+    close: y.close.length,
+    all: y.new.length + y.change.length + y.close.length
+  };
+  document.getElementById('count-all').textContent = counts.all;
+  document.getElementById('count-new').textContent = counts.new;
+  document.getElementById('count-change').textContent = counts.change;
+  document.getElementById('count-close').textContent = counts.close;
+  document.getElementById('stat-all').textContent = counts.all;
+  document.getElementById('stat-new').textContent = counts.new;
+  document.getElementById('stat-change').textContent = counts.change;
+  document.getElementById('stat-close').textContent = counts.close;
+
+  const totalStores = state.data[state.currentYear]?.totalStores ?? 0;
+  document.getElementById('stat-total-stores').textContent = Number(totalStores).toLocaleString();
+  const totalInput = document.getElementById('totalStoresInput');
+  if (totalInput && document.activeElement !== totalInput) {
+    totalInput.value = totalStores || '';
+  }
+}
+
+function updateHeader() {
+  const map = {
+    all:    { badge:'전체', cls:'all', title:'전체 가맹점', sub:'모든 변동 항목을 보고 있습니다' },
+    new:    { badge:'신규', cls:'new', title:'신규 가맹점', sub:'신규 등록 가맹점 목록' },
+    change: { badge:'명의변경', cls:'change', title:'명의변경 가맹점', sub:'대표자 변경 가맹점 목록' },
+    close:  { badge:'폐점', cls:'close', title:'폐점 가맹점', sub:'폐점 처리된 가맹점 목록' },
+  };
+  const v = map[state.currentView];
+  const badge = document.getElementById('viewBadge');
+  badge.textContent = v.badge;
+  badge.className = 'badge ' + v.cls;
+  document.getElementById('viewTitle').textContent = v.title + ' (' + state.currentYear + '년)';
+  document.getElementById('viewSubtitle').textContent = v.sub;
+}
+
+function renderTable() {
+  const container = document.getElementById('tableContainer');
+  const q = (document.getElementById('searchInput').value || '').trim().toLowerCase();
+  const y = state.data[state.currentYear] || { new:[], change:[], close:[] };
+
+  let html = '';
+  const filter = (arr) => arr.filter(it =>
+    !q ||
+    (it.store && it.store.toLowerCase().includes(q)) ||
+    (it.owner && it.owner.toLowerCase().includes(q)) ||
+    (it.ownerBefore && it.ownerBefore.toLowerCase().includes(q)) ||
+    (it.ownerAfter && it.ownerAfter.toLowerCase().includes(q)) ||
+    (it.note && it.note.toLowerCase().includes(q)) ||
+    (it.feeNote && it.feeNote.toLowerCase().includes(q)) ||
+    (it.depositNote && it.depositNote.toLowerCase().includes(q)) ||
+    (it.fryerNote && it.fryerNote.toLowerCase().includes(q)) ||
+    (it.openNote && it.openNote.toLowerCase().includes(q)) ||
+    (it.naverNote && it.naverNote.toLowerCase().includes(q))
+  );
+
+  if (state.currentView === 'all' || state.currentView === 'new') {
+    html += renderNewTable(filter(y.new));
+  }
+  if (state.currentView === 'all' || state.currentView === 'change') {
+    html += renderChangeTable(filter(y.change));
+  }
+  if (state.currentView === 'all' || state.currentView === 'close') {
+    html += renderCloseTable(filter(y.close));
+  }
+  container.innerHTML = html || `<div class="empty-state"><div class="icon">∅</div><p>등록된 항목이 없습니다</p></div>`;
+}
+
+function renderNewTable(items) {
+  let html = `<div style="padding:14px 18px 8px; display:flex; align-items:center; gap:8px; border-bottom:1px solid #ececec;">
+    <span class="badge new">신규</span>
+    <span style="font-weight:600; color:#1a1a1a;">신규 가맹점</span>
+    <span style="color:#999; font-size:12px;">${items.length}건</span>
+  </div>`;
+  if (items.length === 0) {
+    html += `<div class="empty-state"><p>신규 항목이 없습니다</p></div>`;
+    return html;
+  }
+  html += `<table><thead><tr>
+    <th style="width:50px;">No.</th>
+    <th>가맹점명</th>
+    <th>대표자</th>
+    <th>면적(㎡/평)</th>
+    <th>가맹금</th>
+    <th>모계좌입금</th>
+    <th>튀김기</th>
+    <th>오픈</th>
+    <th>네이버</th>
+    <th style="width:80px;"></th>
+  </tr></thead><tbody>`;
+  items.forEach((it, i) => {
+    const fryerKind = [];
+    if (it.fryerPurchase) fryerKind.push('구입');
+    if (it.fryerSupport) fryerKind.push('지원');
+    const fryerKindLabel = fryerKind.length ? fryerKind.join('+') : '–';
+
+    html += `<tr>
+      <td>${i+1}</td>
+      <td><strong>${esc(it.store)}</strong></td>
+      <td>${esc(it.owner)}</td>
+      <td>${esc(it.area)}</td>
+      <td>${fmtMoney(it.feeAmount)}<br><span style="color:#999;font-size:11px;">${esc(it.feeDate)}</span>${it.feeNote ? `<br><span style="color:#888;font-size:11px;">${esc(it.feeNote)}</span>` : ''}</td>
+      <td>${fmtMoney(it.depositAmount)}<br><span style="color:#999;font-size:11px;">${esc(it.depositDate)}</span>${it.depositNote ? `<br><span style="color:#888;font-size:11px;">${esc(it.depositNote)}</span>` : ''}</td>
+      <td>
+        <span style="display:inline-block; padding:1px 7px; background:#f0f0f0; border-radius:3px; font-size:11px; color:#444; font-weight:600;">${fryerKindLabel}</span><br>
+        ${fmtMoney(it.fryerAmount)}<br>
+        <span style="color:#999;font-size:11px;">${esc(it.fryerDate)}</span>
+        ${it.fryerNote ? `<br><span style="color:#888;font-size:11px;">${esc(it.fryerNote)}</span>` : ''}
+      </td>
+      <td>
+        ${esc(it.openDate)}
+        ${it.openNote ? `<br><span style="color:#888;font-size:11px;">${esc(it.openNote)}</span>` : ''}
+      </td>
+      <td>
+        ${it.naverRegistered ? '<span style="color:#1aa260; font-weight:600;">✓ 등록</span>' : '<span style="color:#999;">미등록</span>'}
+        ${it.naverNote ? `<br><span style="color:#888;font-size:11px;">${esc(it.naverNote)}</span>` : ''}
+      </td>
+      <td>${rowActions('new', it.id)}</td>
+    </tr>`;
+  });
+  html += `</tbody></table>`;
+  return html;
+}
+
+function renderChangeTable(items) {
+  let html = `<div style="padding:14px 18px 8px; display:flex; align-items:center; gap:8px; border-bottom:1px solid #ececec; border-top:1px solid #ececec; margin-top:0;">
+    <span class="badge change">명의변경</span>
+    <span style="font-weight:600; color:#1a1a1a;">명의변경 가맹점</span>
+    <span style="color:#999; font-size:12px;">${items.length}건</span>
+  </div>`;
+  if (items.length === 0) {
+    html += `<div class="empty-state"><p>명의변경 항목이 없습니다</p></div>`;
+    return html;
+  }
+  html += `<table><thead><tr>
+    <th style="width:50px;">No.</th>
+    <th>가맹점명</th>
+    <th>대표자(현)</th>
+    <th>현 날짜</th>
+    <th>대표자(후)</th>
+    <th>후 날짜</th>
+    <th>가맹금</th>
+    <th>예치일자</th>
+    <th>예치금액</th>
+    <th>세금계산서일</th>
+    <th>비고</th>
+    <th style="width:80px;"></th>
+  </tr></thead><tbody>`;
+  items.forEach((it, i) => {
+    html += `<tr>
+      <td>${i+1}</td>
+      <td><strong>${esc(it.store)}</strong></td>
+      <td>${esc(it.ownerBefore)}</td>
+      <td>${esc(it.dateBefore)}</td>
+      <td>${esc(it.ownerAfter)}</td>
+      <td>${esc(it.dateAfter)}</td>
+      <td>${fmtMoney(it.feeAmount)}</td>
+      <td>${esc(it.depositDate)}</td>
+      <td>${fmtMoney(it.depositAmount)}</td>
+      <td>${esc(it.taxInvoiceDate)}</td>
+      <td style="color:#666;">${esc(it.note)}</td>
+      <td>${rowActions('change', it.id)}</td>
+    </tr>`;
+  });
+  html += `</tbody></table>`;
+  return html;
+}
+
+function renderCloseTable(items) {
+  let html = `<div style="padding:14px 18px 8px; display:flex; align-items:center; gap:8px; border-bottom:1px solid #ececec; border-top:1px solid #ececec;">
+    <span class="badge close">폐점</span>
+    <span style="font-weight:600; color:#1a1a1a;">폐점 가맹점</span>
+    <span style="color:#999; font-size:12px;">${items.length}건</span>
+  </div>`;
+  if (items.length === 0) {
+    html += `<div class="empty-state"><p>폐점 항목이 없습니다</p></div>`;
+    return html;
+  }
+  html += `<table><thead><tr>
+    <th style="width:50px;">No.</th>
+    <th>가맹점명</th>
+    <th>대표자명</th>
+    <th>최종거래일</th>
+    <th>최종미수금</th>
+    <th>기납입보증금</th>
+    <th>상계일자/금액</th>
+    <th>미수금정리</th>
+    <th>반환</th>
+    <th>네이버삭제</th>
+    <th>상세비고</th>
+    <th style="width:80px;"></th>
+  </tr></thead><tbody>`;
+  items.forEach((it, i) => {
+    html += `<tr>
+      <td>${i+1}</td>
+      <td><strong>${esc(it.store)}</strong></td>
+      <td>${esc(it.owner)}</td>
+      <td>${esc(it.lastDealDate)}</td>
+      <td>${fmtMoney(it.lastUnpaid)}</td>
+      <td>${fmtMoney(it.deposit)}</td>
+      <td>${esc(it.offsetDate)}<br><span style="color:#999;font-size:11px;">${fmtMoney(it.offsetAmount)}</span></td>
+      <td>${esc(it.unpaidClearDate)}<br><span style="color:#999;font-size:11px;">${fmtMoney(it.unpaidClearAmount)}</span></td>
+      <td>${esc(it.returnDate)}<br><span style="color:#999;font-size:11px;">${fmtMoney(it.returnAmount)}</span></td>
+      <td>${it.naverDeleted ? '✓' : '–'}</td>
+      <td style="color:#666;">${esc(it.note)}</td>
+      <td>${rowActions('close', it.id)}</td>
+    </tr>`;
+  });
+  html += `</tbody></table>`;
+  return html;
+}
+
+function rowActions(type, id) {
+  if (VIEW_MODE) return '';
+  return `<div class="row-actions">
+    <button class="icon-btn" title="수정" onclick="openEditModal('${type}', '${id}')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+    </button>
+    <button class="icon-btn danger" title="삭제" onclick="deleteItem('${type}', '${id}')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>
+    </button>
+  </div>`;
+}
+
+/* ---------- 유틸 ---------- */
+function esc(s) { return s == null || s === '' ? '–' : String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function fmtMoney(v) {
+  if (v == null || v === '') return '–';
+  const n = Number(String(v).replace(/,/g,''));
+  if (isNaN(n)) return esc(v);
+  return n.toLocaleString('ko-KR') + '원';
+}
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+/* ---------- 모달 ---------- */
+function openAddModal() {
+  if (VIEW_MODE) return;
+  const type = state.currentView === 'all' ? 'new' : state.currentView;
+  state.editing = { type, id: null };
+  document.getElementById('modalTitle').textContent = '새 항목 추가';
+  document.getElementById('modalBody').innerHTML = buildForm(type, {});
+  document.getElementById('modal').classList.add('show');
+}
+function openEditModal(type, id) {
+  if (VIEW_MODE) return;
+  const list = state.data[state.currentYear][type];
+  const item = list.find(x => String(x.id) === String(id));
+  if (!item) return;
+  state.editing = { type, id };
+  document.getElementById('modalTitle').textContent = '항목 수정';
+  document.getElementById('modalBody').innerHTML = buildForm(type, item);
+  document.getElementById('modal').classList.add('show');
+}
+function closeModal() {
+  document.getElementById('modal').classList.remove('show');
+  state.editing = null;
+}
+
+function buildForm(type, d) {
+  let html = `<div class="form-row full">
+    <div class="form-field">
+      <label>카테고리</label>
+      <select id="f_type" ${state.editing && state.editing.id ? 'disabled' : ''}>
+        <option value="new" ${type==='new'?'selected':''}>신규</option>
+        <option value="change" ${type==='change'?'selected':''}>명의변경</option>
+        <option value="close" ${type==='close'?'selected':''}>폐점</option>
+      </select>
+    </div>
+  </div>`;
+
+  if (type === 'new') {
+    html += `
+      <div class="form-row">
+        <div class="form-field"><label>가맹점명</label><input id="f_store" value="${attr(d.store)}"></div>
+        <div class="form-field"><label>대표자</label><input id="f_owner" value="${attr(d.owner)}"></div>
+      </div>
+      <div class="form-row full">
+        <div class="form-field"><label>면적 (㎡/평)</label><input id="f_area" value="${attr(d.area)}"></div>
+      </div>
+      <div class="form-section">
+        <div class="form-section-title">1. 가맹금</div>
+        <div class="form-row">
+          <div class="form-field"><label>예치일자</label><input type="date" id="f_feeDate" value="${attr(d.feeDate)}"></div>
+          <div class="form-field"><label>금액</label><input id="f_feeAmount" value="${attr(d.feeAmount)}"></div>
+        </div>
+        <div class="form-row full">
+          <div class="form-field"><label>비고</label><input id="f_feeNote" value="${attr(d.feeNote)}"></div>
+        </div>
+      </div>
+      <div class="form-section">
+        <div class="form-section-title">2. 가맹금 모계좌</div>
+        <div class="form-row">
+          <div class="form-field"><label>입금일자</label><input type="date" id="f_depositDate" value="${attr(d.depositDate)}"></div>
+          <div class="form-field"><label>금액</label><input id="f_depositAmount" value="${attr(d.depositAmount)}"></div>
+        </div>
+        <div class="form-row full">
+          <div class="form-field"><label>비고</label><input id="f_depositNote" value="${attr(d.depositNote)}"></div>
+        </div>
+      </div>
+      <div class="form-section">
+        <div class="form-section-title">3. 튀김기</div>
+        <div class="form-row full">
+          <div class="form-field">
+            <label>구분 (복수 선택 가능)</label>
+            <div style="display:flex; gap:18px; padding:6px 2px;">
+              <label style="display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer; text-transform:none; letter-spacing:normal; color:#2b2b2b; font-weight:500;">
+                <input type="checkbox" id="f_fryerPurchase" ${d.fryerPurchase ? 'checked' : ''} style="width:16px; height:16px; cursor:pointer;">
+                구입
+              </label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer; text-transform:none; letter-spacing:normal; color:#2b2b2b; font-weight:500;">
+                <input type="checkbox" id="f_fryerSupport" ${d.fryerSupport ? 'checked' : ''} style="width:16px; height:16px; cursor:pointer;">
+                지원
+              </label>
+            </div>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-field"><label>입금일자</label><input type="date" id="f_fryerDate" value="${attr(d.fryerDate)}"></div>
+          <div class="form-field"><label>금액</label><input id="f_fryerAmount" value="${attr(d.fryerAmount)}"></div>
+        </div>
+        <div class="form-row full">
+          <div class="form-field"><label>비고</label><input id="f_fryerNote" value="${attr(d.fryerNote)}"></div>
+        </div>
+      </div>
+      <div class="form-section">
+        <div class="form-section-title">4. 오픈</div>
+        <div class="form-row">
+          <div class="form-field"><label>오픈일자</label><input type="date" id="f_openDate" value="${attr(d.openDate)}"></div>
+          <div class="form-field"><label>비고</label><input id="f_openNote" value="${attr(d.openNote)}"></div>
+        </div>
+      </div>
+      <div class="form-section">
+        <div class="form-section-title">5. 네이버</div>
+        <div class="form-row">
+          <div class="form-field"><label>네이버 등록</label>
+            <select id="f_naverRegistered">
+              <option value="false" ${!d.naverRegistered?'selected':''}>미등록</option>
+              <option value="true" ${d.naverRegistered?'selected':''}>등록완료</option>
+            </select>
+          </div>
+          <div class="form-field"><label>비고</label><input id="f_naverNote" value="${attr(d.naverNote)}"></div>
+        </div>
+      </div>
+    `;
+  } else if (type === 'change') {
+    html += `
+      <div class="form-row full">
+        <div class="form-field"><label>가맹점명</label><input id="f_store" value="${attr(d.store)}"></div>
+      </div>
+      <div class="form-section">
+        <div class="form-section-title">대표자 변경 정보</div>
+        <div class="form-row">
+          <div class="form-field"><label>1. 대표자 (현)</label><input id="f_ownerBefore" value="${attr(d.ownerBefore)}"></div>
+          <div class="form-field"><label>변경 전 날짜</label><input type="date" id="f_dateBefore" value="${attr(d.dateBefore)}"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-field"><label>2. 대표자 (후)</label><input id="f_ownerAfter" value="${attr(d.ownerAfter)}"></div>
+          <div class="form-field"><label>변경 후 날짜</label><input type="date" id="f_dateAfter" value="${attr(d.dateAfter)}"></div>
+        </div>
+      </div>
+      <div class="form-section">
+        <div class="form-section-title">가맹금 / 세금계산서</div>
+        <div class="form-row">
+          <div class="form-field"><label>가맹금</label><input id="f_feeAmount" value="${attr(d.feeAmount)}"></div>
+          <div class="form-field"><label>예치일자</label><input type="date" id="f_depositDate" value="${attr(d.depositDate)}"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-field"><label>예치금액</label><input id="f_depositAmount" value="${attr(d.depositAmount)}"></div>
+          <div class="form-field"><label>가맹금 세금계산서 발행일자</label><input type="date" id="f_taxInvoiceDate" value="${attr(d.taxInvoiceDate)}"></div>
+        </div>
+        <div class="form-row full">
+          <div class="form-field"><label>비고</label><textarea id="f_note">${attr(d.note)}</textarea></div>
+        </div>
+      </div>
+    `;
+  } else if (type === 'close') {
+    html += `
+      <div class="form-row">
+        <div class="form-field"><label>가맹점명</label><input id="f_store" value="${attr(d.store)}"></div>
+        <div class="form-field"><label>대표자명</label><input id="f_owner" value="${attr(d.owner)}"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-field"><label>최종거래일</label><input type="date" id="f_lastDealDate" value="${attr(d.lastDealDate)}"></div>
+        <div class="form-field"><label>최종미수금</label><input id="f_lastUnpaid" value="${attr(d.lastUnpaid)}"></div>
+      </div>
+      <div class="form-row full">
+        <div class="form-field"><label>기납입보증금</label><input id="f_deposit" value="${attr(d.deposit)}"></div>
+      </div>
+      <div class="form-section">
+        <div class="form-section-title">상계 / 미수금정리 / 반환</div>
+        <div class="form-row">
+          <div class="form-field"><label>상계일자</label><input type="date" id="f_offsetDate" value="${attr(d.offsetDate)}"></div>
+          <div class="form-field"><label>상계금액</label><input id="f_offsetAmount" value="${attr(d.offsetAmount)}"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-field"><label>미수금정리일자</label><input type="date" id="f_unpaidClearDate" value="${attr(d.unpaidClearDate)}"></div>
+          <div class="form-field"><label>미수금정리 금액</label><input id="f_unpaidClearAmount" value="${attr(d.unpaidClearAmount)}"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-field"><label>반환일자</label><input type="date" id="f_returnDate" value="${attr(d.returnDate)}"></div>
+          <div class="form-field"><label>반환금액</label><input id="f_returnAmount" value="${attr(d.returnAmount)}"></div>
+        </div>
+      </div>
+      <div class="form-section">
+        <div class="form-row">
+          <div class="form-field"><label>네이버삭제</label>
+            <select id="f_naverDeleted">
+              <option value="false" ${!d.naverDeleted?'selected':''}>미삭제</option>
+              <option value="true" ${d.naverDeleted?'selected':''}>삭제완료</option>
+            </select>
+          </div>
+          <div class="form-field"><label>상세비고</label><input id="f_note" value="${attr(d.note)}"></div>
+        </div>
+      </div>
+    `;
+  }
+  return html;
+}
+function attr(v) { return v == null ? '' : String(v).replace(/"/g,'&quot;'); }
+
+/* ---------- 저장 ---------- */
+function saveItem() {
+  if (VIEW_MODE) return;
+  if (!state.editing) return;
+  const newType = document.getElementById('f_type').value;
+  const oldType = state.editing.type;
+
+  const getVal = (id) => {
+    const el = document.getElementById(id);
+    return el ? el.value.trim() : '';
+  };
+  const getBool = (id) => document.getElementById(id)?.value === 'true';
+  const getChecked = (id) => document.getElementById(id)?.checked || false;
+
+  let item = { id: state.editing.id || uid(), createdAt: new Date().toISOString() };
+
+  if (newType === 'new') {
+    item = { ...item,
+      store: getVal('f_store'), owner: getVal('f_owner'),
+      area: getVal('f_area'),
+      feeDate: getVal('f_feeDate'), feeAmount: getVal('f_feeAmount'), feeNote: getVal('f_feeNote'),
+      depositDate: getVal('f_depositDate'), depositAmount: getVal('f_depositAmount'), depositNote: getVal('f_depositNote'),
+      fryerPurchase: getChecked('f_fryerPurchase'), fryerSupport: getChecked('f_fryerSupport'),
+      fryerDate: getVal('f_fryerDate'), fryerAmount: getVal('f_fryerAmount'), fryerNote: getVal('f_fryerNote'),
+      openDate: getVal('f_openDate'), openNote: getVal('f_openNote'),
+      naverRegistered: getBool('f_naverRegistered'), naverNote: getVal('f_naverNote')
+    };
+  } else if (newType === 'change') {
+    item = { ...item,
+      store: getVal('f_store'),
+      ownerBefore: getVal('f_ownerBefore'), dateBefore: getVal('f_dateBefore'),
+      ownerAfter: getVal('f_ownerAfter'), dateAfter: getVal('f_dateAfter'),
+      feeAmount: getVal('f_feeAmount'),
+      depositDate: getVal('f_depositDate'), depositAmount: getVal('f_depositAmount'),
+      taxInvoiceDate: getVal('f_taxInvoiceDate'), note: getVal('f_note')
+    };
+  } else if (newType === 'close') {
+    item = { ...item,
+      store: getVal('f_store'), owner: getVal('f_owner'),
+      lastDealDate: getVal('f_lastDealDate'), lastUnpaid: getVal('f_lastUnpaid'),
+      deposit: getVal('f_deposit'),
+      offsetDate: getVal('f_offsetDate'), offsetAmount: getVal('f_offsetAmount'),
+      unpaidClearDate: getVal('f_unpaidClearDate'), unpaidClearAmount: getVal('f_unpaidClearAmount'),
+      returnDate: getVal('f_returnDate'), returnAmount: getVal('f_returnAmount'),
+      naverDeleted: getBool('f_naverDeleted'), note: getVal('f_note')
+    };
+  }
+
+  if (!item.store) { showToast('가맹점명을 입력하세요'); return; }
+
+  ensureYear(state.currentYear);
+  if (state.editing.id) {
+    state.data[state.currentYear][oldType] = state.data[state.currentYear][oldType].filter(x => String(x.id) !== String(state.editing.id));
+  }
+  state.data[state.currentYear][newType].push(item);
+
+  saveData();
+  closeModal();
+  renderAll();
+  showToast('저장되었습니다');
+}
+
+/* ---------- 삭제 ---------- */
+function deleteItem(type, id) {
+  if (VIEW_MODE) return;
+  if (!confirm('이 항목을 삭제하시겠습니까?')) return;
+  state.data[state.currentYear][type] = state.data[state.currentYear][type].filter(x => String(x.id) !== String(id));
+  saveData();
+  renderAll();
+  showToast('삭제되었습니다');
+}
+
+/* ---------- 백업/복원/공유 ---------- */
+function exportJSON() {
+  const blob = new Blob([JSON.stringify(state.data, null, 2)], { type:'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `franchise-backup-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('백업 파일이 생성되었습니다');
+}
+function importJSON(ev) {
+  const f = ev.target.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = e => {
+    try {
+      const parsed = JSON.parse(e.target.result);
+      if (!confirm('현재 데이터를 덮어씁니다. 진행하시겠습니까?')) return;
+      state.data = parsed;
+      saveData();
+      initYearSelector();
+      renderAll();
+      showToast('데이터가 복원되었습니다');
+    } catch(err) {
+      alert('잘못된 파일입니다: ' + err.message);
+    }
+  };
+  r.readAsText(f);
+  ev.target.value = '';
+}
+function exportCSV() {
+  const y = state.data[state.currentYear] || { new:[], change:[], close:[], totalStores:0 };
+  const rows = [];
+  rows.push([`${state.currentYear}년 전체 가맹점 수`, y.totalStores || 0]);
+  rows.push([]);
+  rows.push(['카테고리','가맹점명','대표자/대표자(후)','날짜1','금액1','비고']);
+  y.new.forEach(it => {
+    const fryerKind = [it.fryerPurchase?'구입':'', it.fryerSupport?'지원':''].filter(Boolean).join('+');
+    const noteCombined = [it.feeNote, it.depositNote, it.fryerNote && `튀김기(${fryerKind}):${it.fryerNote}`, it.openNote, it.naverNote].filter(Boolean).join(' / ');
+    rows.push(['신규', it.store, it.owner, it.openDate, it.feeAmount, noteCombined]);
+  });
+  y.change.forEach(it => rows.push(['명의변경', it.store, it.ownerAfter, it.dateAfter, it.feeAmount, it.note]));
+  y.close.forEach(it => rows.push(['폐점', it.store, it.owner, it.lastDealDate, it.lastUnpaid, it.note]));
+  const csv = '\ufeff' + rows.map(r => r.map(c => `"${(c==null?'':String(c)).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type:'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `franchise-${state.currentYear}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('CSV 파일이 생성되었습니다');
+}
+
+function shareViewLink() {
+  const url = window.location.origin + window.location.pathname + '?mode=view';
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(url).then(() => {
+      showToast('읽기 전용 링크가 클립보드에 복사되었습니다');
+    });
+  } else {
+    prompt('아래 링크를 복사하세요:', url);
+  }
+}
+
+function manualSheetsBackup() {
+  if (state.pendingBackupTimer) clearTimeout(state.pendingBackupTimer);
+  runSheetsBackup(false);
+}
+
+/* ---------- 토스트 ---------- */
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+/* ---------- 초기화 ---------- */
+loadLocal();
+initYearSelector();
+initNav();
+
+// 전체 가맹점 수 입력
+document.getElementById('totalStoresInput').addEventListener('input', (e) => {
+  if (VIEW_MODE) return;
+  ensureYear(state.currentYear);
+  const v = Number(e.target.value);
+  state.data[state.currentYear].totalStores = isNaN(v) ? 0 : v;
+  saveData();
+  document.getElementById('stat-total-stores').textContent = (state.data[state.currentYear].totalStores).toLocaleString();
+});
+
+renderAll();
+setSyncStatus('syncing', 'Firebase 연결 중...');
+attachFirebaseListener();
+</script>
+
+</body>
+</html>
