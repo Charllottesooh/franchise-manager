@@ -269,9 +269,11 @@
     gap: 10px;
     margin-bottom: 20px;
     align-items: center;
+    flex-wrap: wrap;
   }
   .search-input {
     flex: 1;
+    min-width: 200px;
     padding: 9px 12px;
     border: 1px solid #e5e5e5;
     border-radius: 6px;
@@ -283,25 +285,40 @@
     outline: none;
     border-color: #1a1a1a;
   }
-  .filter-chip {
-    padding: 6px 12px;
+  .date-filter {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     background: #fff;
     border: 1px solid #e5e5e5;
-    border-radius: 20px;
+    border-radius: 6px;
+    padding: 4px 8px;
     font-size: 12px;
-    color: #666;
-    cursor: pointer;
   }
-  .filter-chip.active {
-    background: #1a1a1a;
-    color: #fff;
-    border-color: #1a1a1a;
+  .date-filter label {
+    color: #888;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+    margin-right: 2px;
+  }
+  .date-filter input[type="date"] {
+    border: none;
+    padding: 4px 4px;
+    font-size: 12px;
+    background: transparent;
+    font-family: inherit;
+    color: #2b2b2b;
+  }
+  .date-filter input[type="date"]:focus {
+    outline: none;
   }
 
   /* ===== 통계 카드 ===== */
   .stats {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 12px;
     margin-bottom: 24px;
   }
@@ -360,12 +377,29 @@
     text-align: left;
     padding: 12px 14px;
     font-size: 11px;
-    font-weight: 600;
+    font-weight: 700;
     color: #666;
     text-transform: uppercase;
     letter-spacing: 0.3px;
     white-space: nowrap;
   }
+  .section-header {
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-top: 1px solid #ececec;
+  }
+  .section-header:first-child { border-top: none; }
+  .section-header.cat-new { background: #f5d800; }
+  .section-header.cat-new .title { color: #1a1a1a; font-weight: 700; font-size: 14px; }
+  .section-header.cat-new .count { color: #5a4f00; font-size: 12px; font-weight: 600; }
+  .section-header.cat-change { background: #1aa260; }
+  .section-header.cat-change .title { color: #fff; font-weight: 700; font-size: 14px; }
+  .section-header.cat-change .count { color: rgba(255,255,255,0.85); font-size: 12px; font-weight: 600; }
+  .section-header.cat-close { background: #e34a4a; }
+  .section-header.cat-close .title { color: #fff; font-weight: 700; font-size: 14px; }
+  .section-header.cat-close .count { color: rgba(255,255,255,0.9); font-size: 12px; font-weight: 600; }
   td {
     padding: 12px 14px;
     border-bottom: 1px solid #f4f4f4;
@@ -522,15 +556,96 @@
 
   /* ===== 인쇄 ===== */
   @media print {
-    .sidebar, .header-actions, .search-bar, .row-actions, .stats { display: none !important; }
-    .main { margin-left: 0; padding: 20px; }
-    .table-wrapper { border: 1px solid #000; }
-    body { background: #fff; }
+    @page {
+      size: A4 landscape;
+      margin: 10mm 8mm;
+    }
+    * {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    html, body {
+      background: #fff !important;
+      font-size: 9pt !important;
+      width: 100% !important;
+      overflow: visible !important;
+    }
+    .sidebar,
+    .header-actions,
+    .search-bar,
+    .row-actions,
+    .stats,
+    .view-mode-banner,
+    .sync-status,
+    .nav-actions,
+    .modal-overlay,
+    .toast { display: none !important; }
+
+    .main {
+      margin-left: 0 !important;
+      max-width: 100% !important;
+      width: 100% !important;
+      padding: 0 !important;
+    }
+    .main-header {
+      padding-bottom: 8px;
+      margin-bottom: 10px;
+      border-bottom: 2px solid #1a1a1a;
+    }
+    .main-title h2 { font-size: 14pt !important; }
+    .main-title p { font-size: 8pt !important; }
+
+    .table-wrapper {
+      border: none !important;
+      border-radius: 0 !important;
+      page-break-inside: auto;
+    }
+    .table-scroll {
+      overflow: visible !important;
+    }
+    table {
+      width: 100% !important;
+      min-width: 0 !important;
+      font-size: 8pt !important;
+      table-layout: auto;
+      page-break-inside: auto;
+    }
+    thead { display: table-header-group; }
+    tr { page-break-inside: avoid; page-break-after: auto; }
+    th, td {
+      padding: 4px 5px !important;
+      white-space: normal !important;
+      word-break: break-word;
+      vertical-align: top;
+    }
+    th {
+      font-size: 7.5pt !important;
+      letter-spacing: 0 !important;
+    }
+    .section-header {
+      padding: 6px 10px !important;
+      page-break-after: avoid;
+      page-break-before: auto;
+    }
+    .section-header.cat-new { background: #f5d800 !important; }
+    .section-header.cat-new .title,
+    .section-header.cat-new .count { color: #1a1a1a !important; }
+    .section-header.cat-change { background: #1aa260 !important; }
+    .section-header.cat-change .title,
+    .section-header.cat-change .count { color: #fff !important; }
+    .section-header.cat-close { background: #e34a4a !important; }
+    .section-header.cat-close .title,
+    .section-header.cat-close .count { color: #fff !important; }
+
+    .badge { font-size: 8pt !important; padding: 2px 6px !important; }
+    .badge.new { background: #f5d800 !important; color: #1a1a1a !important; }
+    .badge.change { background: #1aa260 !important; color: #fff !important; }
+    .badge.close { background: #e34a4a !important; color: #fff !important; }
   }
 
   /* ===== 반응형 ===== */
-  @media (max-width: 1200px) {
-    .stats { grid-template-columns: repeat(3, 1fr); }
+  @media (max-width: 1100px) {
+    .stats { grid-template-columns: repeat(2, 1fr); }
   }
   @media (max-width: 900px) {
     .sidebar { transform: translateX(-100%); transition: transform 0.2s; z-index: 50; }
@@ -658,11 +773,6 @@
         <div class="value" id="stat-total-stores">0</div>
         <div class="sub">개</div>
       </div>
-      <div class="stat-card accent-total">
-        <div class="label">변동 합계</div>
-        <div class="value" id="stat-all">0</div>
-        <div class="sub">건</div>
-      </div>
       <div class="stat-card accent-new">
         <div class="label">신규</div>
         <div class="value" id="stat-new">0</div>
@@ -683,6 +793,13 @@
     <!-- 검색바 -->
     <div class="search-bar">
       <input type="text" class="search-input" id="searchInput" placeholder="가맹점명, 대표자명으로 검색..." oninput="renderTable()">
+      <div class="date-filter">
+        <label>기간</label>
+        <input type="date" id="dateFrom" onchange="renderTable()" title="시작일">
+        <span style="color:#999;">~</span>
+        <input type="date" id="dateTo" onchange="renderTable()" title="종료일">
+        <button class="btn" onclick="clearDateFilter()" style="padding:6px 10px; font-size:12px;">초기화</button>
+      </div>
     </div>
 
     <!-- 테이블 -->
@@ -980,7 +1097,6 @@ function updateCounts() {
   document.getElementById('count-new').textContent = counts.new;
   document.getElementById('count-change').textContent = counts.change;
   document.getElementById('count-close').textContent = counts.close;
-  document.getElementById('stat-all').textContent = counts.all;
   document.getElementById('stat-new').textContent = counts.new;
   document.getElementById('stat-change').textContent = counts.change;
   document.getElementById('stat-close').textContent = counts.close;
@@ -1011,10 +1127,28 @@ function updateHeader() {
 function renderTable() {
   const container = document.getElementById('tableContainer');
   const q = (document.getElementById('searchInput').value || '').trim().toLowerCase();
+  const dateFrom = document.getElementById('dateFrom')?.value || '';
+  const dateTo = document.getElementById('dateTo')?.value || '';
   const y = state.data[state.currentYear] || { new:[], change:[], close:[] };
 
+  // 카테고리별 기준 날짜 필드
+  const dateField = {
+    new: 'openDate',         // 신규: 오픈일자
+    change: 'dateAfter',     // 명의변경: 변경 후 날짜
+    close: 'lastDealDate'    // 폐점: 최종거래일
+  };
+
+  const inDateRange = (item, type) => {
+    if (!dateFrom && !dateTo) return true;
+    const d = item[dateField[type]];
+    if (!d) return false; // 날짜 필터 활성 시 날짜 없는 항목 제외
+    if (dateFrom && d < dateFrom) return false;
+    if (dateTo && d > dateTo) return false;
+    return true;
+  };
+
   let html = '';
-  const filter = (arr) => arr.filter(it =>
+  const filterText = (arr) => arr.filter(it =>
     !q ||
     (it.store && it.store.toLowerCase().includes(q)) ||
     (it.owner && it.owner.toLowerCase().includes(q)) ||
@@ -1027,24 +1161,30 @@ function renderTable() {
     (it.openNote && it.openNote.toLowerCase().includes(q)) ||
     (it.naverNote && it.naverNote.toLowerCase().includes(q))
   );
+  const filterAll = (arr, type) => filterText(arr).filter(it => inDateRange(it, type));
 
   if (state.currentView === 'all' || state.currentView === 'new') {
-    html += renderNewTable(filter(y.new));
+    html += renderNewTable(filterAll(y.new, 'new'));
   }
   if (state.currentView === 'all' || state.currentView === 'change') {
-    html += renderChangeTable(filter(y.change));
+    html += renderChangeTable(filterAll(y.change, 'change'));
   }
   if (state.currentView === 'all' || state.currentView === 'close') {
-    html += renderCloseTable(filter(y.close));
+    html += renderCloseTable(filterAll(y.close, 'close'));
   }
   container.innerHTML = html || `<div class="empty-state"><div class="icon">∅</div><p>등록된 항목이 없습니다</p></div>`;
 }
 
+function clearDateFilter() {
+  document.getElementById('dateFrom').value = '';
+  document.getElementById('dateTo').value = '';
+  renderTable();
+}
+
 function renderNewTable(items) {
-  let html = `<div style="padding:14px 18px 8px; display:flex; align-items:center; gap:8px; border-bottom:1px solid #ececec;">
-    <span class="badge new">신규</span>
-    <span style="font-weight:600; color:#1a1a1a;">신규 가맹점</span>
-    <span style="color:#999; font-size:12px;">${items.length}건</span>
+  let html = `<div class="section-header cat-new">
+    <span class="title">신규</span>
+    <span class="count">${items.length}건</span>
   </div>`;
   if (items.length === 0) {
     html += `<div class="empty-state"><p>신규 항목이 없습니다</p></div>`;
@@ -1097,10 +1237,9 @@ function renderNewTable(items) {
 }
 
 function renderChangeTable(items) {
-  let html = `<div style="padding:14px 18px 8px; display:flex; align-items:center; gap:8px; border-bottom:1px solid #ececec; border-top:1px solid #ececec; margin-top:0;">
-    <span class="badge change">명의변경</span>
-    <span style="font-weight:600; color:#1a1a1a;">명의변경 가맹점</span>
-    <span style="color:#999; font-size:12px;">${items.length}건</span>
+  let html = `<div class="section-header cat-change">
+    <span class="title">명의변경</span>
+    <span class="count">${items.length}건</span>
   </div>`;
   if (items.length === 0) {
     html += `<div class="empty-state"><p>명의변경 항목이 없습니다</p></div>`;
@@ -1141,10 +1280,9 @@ function renderChangeTable(items) {
 }
 
 function renderCloseTable(items) {
-  let html = `<div style="padding:14px 18px 8px; display:flex; align-items:center; gap:8px; border-bottom:1px solid #ececec; border-top:1px solid #ececec;">
-    <span class="badge close">폐점</span>
-    <span style="font-weight:600; color:#1a1a1a;">폐점 가맹점</span>
-    <span style="color:#999; font-size:12px;">${items.length}건</span>
+  let html = `<div class="section-header cat-close">
+    <span class="title">폐점</span>
+    <span class="count">${items.length}건</span>
   </div>`;
   if (items.length === 0) {
     html += `<div class="empty-state"><p>폐점 항목이 없습니다</p></div>`;
